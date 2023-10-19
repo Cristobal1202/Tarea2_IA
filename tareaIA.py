@@ -1,7 +1,30 @@
 import random
 import matplotlib.pyplot as plt
 
-# Función para aplicar muestreo proporcional
+# Función para simular el movimiento del submarino
+def move_submarine(particles):
+    new_particles = []
+    for particle in particles:
+        # Simular el movimiento del submarino en cada dimensión
+        particle[0] += random.gauss(0, 0.1)  # Movimiento en x
+        particle[1] += random.gauss(0, 0.1)  # Movimiento en y
+        particle[2] += random.gauss(0, 0.1)  # Movimiento en z
+        particle[3] += random.gauss(0, 0.01)  # Cambio de aceleración
+        particle[4] += random.gauss(0, 0.1)  # Cambio de velocidad
+        new_particles.append(particle)
+    return new_particles
+
+# Función para calcular los pesos de las partículas (simulación simple)
+def calculate_weights(particles, measurements):
+    weights = []
+    for particle in particles:
+        weight = 1.0
+        for i in range(5):
+            weight *= 1.0 / (1.0 + abs(particle[i] - measurements[i]))
+        weights.append(weight)
+    return weights
+
+# Resampling proporcional
 def proportional_resampling(particles, weights):
     num_particles = len(particles)
     new_particles = []
@@ -12,7 +35,7 @@ def proportional_resampling(particles, weights):
         new_particles.append(particles[selected_particle_index])
     return new_particles
 
-# Función para aplicar muestreo estratificado
+# Resampling estratificado
 def stratified_resampling(particles, weights):
     num_particles = len(particles)
     new_particles = []
@@ -25,68 +48,59 @@ def stratified_resampling(particles, weights):
         new_particles.append(particles[selected_particle_index])
     return new_particles
 
-# Generación de datos ficticios
-num_data_points = 100
-true_position = [0.0, 0.0, 0.0, 1.0, 2.0]  # Posición inicial (x, y, z) y velocidad (vx, vy)
-measurement_noise = 0.1  # Ruido en las medidas
-data = []
+# Número de partículas
+N_values = [50, 100, 200]  # Cambio en la cantidad de partículas
 
-for _ in range(num_data_points):
-    true_position[0] += true_position[3]  # Actualizar posición en x
-    true_position[1] += true_position[4]  # Actualizar posición en y
-    true_position[2] += 0.0  # Mantener z constante
-    noisy_measurement = [true_pos + random.uniform(-measurement_noise, measurement_noise) for true_pos in true_position]
-    data.append(noisy_measurement)
+# Inicialización de partículas (simulación simple)
+initial_particles = [[0.0, 0.0, 0.0, 0.0, 0.0] for _ in range(max(N_values))]
 
-# Guardar datos en un archivo de texto
-with open("data.txt", "w") as data_file:
-    for measurement in data:
-        data_file.write("\t".join(map(str, measurement)) + "\n")
+# Mediciones simuladas (simulación simple)
+measurements = [1.0, 1.0, 1.0, 0.0, 0.0]
 
-# Leer datos desde el archivo
-data = []
-with open("data.txt", "r") as data_file:
-    for line in data_file:
-        data.append(list(map(float, line.strip().split("\t"))))
+# Listas para almacenar los resultados
+results_proportional = []
+results_stratified = []
 
-# Valores de N (número de partículas) para las pruebas
-num_particles_values = [50, 100, 200]
+# Iteraciones del filtro de partículas
+for N in N_values:
+    # Inicialización de N partículas
+    particles = initial_particles[:N]
 
-for i, num_particles in enumerate(num_particles_values):
-    # Inicialización de partículas
-    particles = [[random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1)] for _ in range(num_particles)]
+    # Movimiento del submarino
+    particles = move_submarine(particles)
 
-    # Simulación del filtro de partículas
-    estimated_positions_proporcional = []
-    estimated_positions_estratificado = []
+    # Cálculo de pesos
+    weights = calculate_weights(particles, measurements)
 
-    for measurement in data:
-        # Actualizar partículas con ruido
-        particles = [[p[i] + random.uniform(-0.1, 0.1) for i in range(5)] for p in particles]
+    # Resampling proporcional
+    particles_proportional = proportional_resampling(particles, weights)
 
-        # Calcular las diferencias entre las medidas y las partículas
-        weights = [sum([(m - p[i]) ** 2 for i, m in enumerate(measurement)]) for p in particles]
+    # Resampling estratificado
+    particles_stratified = stratified_resampling(particles, weights)
 
-        # Aplicar muestreo proporcional
-        particles_proporcional = proportional_resampling(particles, weights)
+    # Almacenar las partículas después del resampling
+    results_proportional.append(particles_proportional)
+    results_stratified.append(particles_stratified)
 
-        # Aplicar muestreo estratificado
-        particles_estratificado = stratified_resampling(particles, weights)
-
-        # Calcular la estimación promedio de la posición
-        estimated_position_proporcional = [sum(p[i] for p in particles_proporcional) / num_particles for i in range(5)]
-        estimated_position_estratificado = [sum(p[i] for p in particles_estratificado) / num_particles for i in range(5)]
-
-        estimated_positions_proporcional.append(estimated_position_proporcional)
-        estimated_positions_estratificado.append(estimated_position_estratificado)
-
-    # Visualización de los resultados
-    estimated_positions_proporcional = list(zip(*estimated_positions_proporcional))
-    estimated_positions_estratificado = list(zip(*estimated_positions_estratificado))
-
+# Graficar la dispersión de partículas en cada dimensión
+for i, N in enumerate(N_values):
     plt.figure(figsize=(12, 6))
-    plt.plot(estimated_positions_proporcional[0], label=f'Proporcional (N={num_particles})', linestyle='-.', color='b')
-    plt.plot(estimated_positions_estratificado[0], label=f'Estratificado (N={num_particles})', linestyle=':', color='r')
-    plt.legend()
-    plt.title(f'Estimación de Posición X (N={num_particles})')
+    plt.suptitle(f'Resampling con N = {N}', fontsize=16)
+
+    for j, dimension in enumerate(["X", "Y", "Z", "Aceleración", "Velocidad"]):
+        plt.subplot(2, 3, j+1)
+        plt.title(f"{dimension} Dimensión")
+        
+        particles_proportional = [particle[j] for particle in results_proportional[i]]
+        particles_stratified = [particle[j] for particle in results_stratified[i]]
+        
+        plt.scatter(range(N), particles_proportional, c='b', label='Proporcional', s=15)
+        plt.scatter(range(N), particles_stratified, c='r', label='Estratificado', s=15)
+        
+        plt.xlabel("Partícula")
+        plt.ylabel(f"{dimension}")
+        plt.legend()
+    
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.9)
     plt.show()
